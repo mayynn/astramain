@@ -388,10 +388,34 @@ export default function Landing() {
                       )}
                       <div className="space-y-6">
                         <div>
-                          <h3 className="text-2xl font-bold text-white mb-2">{plan.name}</h3>
+                          <div className="flex items-center gap-2 mb-2">
+                            <h3 className="text-2xl font-bold text-white">{plan.name}</h3>
+                            {plan.plan_type === "coin" && (
+                              <span className="px-2 py-0.5 rounded-full bg-primary-500/10 border border-primary-500/20 text-xs font-semibold text-primary-300">Coins</span>
+                            )}
+                            {plan.plan_type === "real" && (
+                              <span className="px-2 py-0.5 rounded-full bg-accent-500/10 border border-accent-500/20 text-xs font-semibold text-accent-300">Premium</span>
+                            )}
+                          </div>
                           <div className="flex items-baseline gap-2">
-                            <span className={`text-4xl font-extrabold ${plan.popular ? "text-gradient" : "text-white"}`}>₹{plan.price}</span>
-                            <span className="text-slate-500 font-medium">/month</span>
+                            {plan.plan_type === "coin" ? (
+                              plan.price === 0 ? (
+                                <>
+                                  <span className={`text-4xl font-extrabold ${plan.popular ? "text-gradient" : "text-green-400"}`}>FREE</span>
+                                  <span className="text-slate-500 font-medium">then {plan.renewal_price} coins/{plan.duration_days}d</span>
+                                </>
+                              ) : (
+                                <>
+                                  <span className={`text-4xl font-extrabold ${plan.popular ? "text-gradient" : "text-white"}`}>{plan.price}</span>
+                                  <span className="text-slate-500 font-medium">coins / {plan.duration_days} days</span>
+                                </>
+                              )
+                            ) : (
+                              <>
+                                <span className={`text-4xl font-extrabold ${plan.popular ? "text-gradient" : "text-white"}`}>₹{plan.price}</span>
+                                <span className="text-slate-500 font-medium">/ {plan.duration_days} days</span>
+                              </>
+                            )}
                           </div>
                         </div>
                         

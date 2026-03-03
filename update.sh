@@ -114,6 +114,7 @@ if [[ "$REPO_DIR" != "$APP_DIR" && -d "$REPO_DIR/backend" ]]; then
     --exclude='backend/.env.*' \
     --exclude='backend/data/' \
     --exclude='backend/uploads/' \
+    --exclude='backend/public/uploads/' \
     --exclude='backend/node_modules/' \
     --exclude='frontend/.env' \
     --exclude='frontend/.env.*' \

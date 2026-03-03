@@ -38,16 +38,55 @@ function emitPlansUpdate(plans) {
 }
 
 async function getLandingPlans(adminView = false) {
-  const sql = adminView
-    ? "SELECT * FROM landing_plans ORDER BY popular DESC, price ASC"
-    : "SELECT * FROM landing_plans WHERE active = 1 ORDER BY popular DESC, price ASC"
-  const rows = await query(sql)
-  return rows.map((p) => ({
-    ...p,
-    features: safeParseJSON(p.features, []),
-    popular: Boolean(p.popular),
-    active: Boolean(p.active)
-  }))
+  // Auto-synced from plans_coin + plans_real — no separate landing_plans table
+  const coinPlans = await query("SELECT * FROM plans_coin ORDER BY coin_price ASC")
+  const realPlans = await query("SELECT * FROM plans_real ORDER BY price ASC")
+
+  const merged = []
+  for (const p of coinPlans) {
+    merged.push({
+      id: `coin-${p.id}`,
+      name: p.name,
+      plan_type: "coin",
+      price: p.initial_price ?? p.coin_price,
+      renewal_price: p.renewal_price ?? p.coin_price,
+      ram: p.ram,
+      cpu: p.cpu,
+      storage: p.storage,
+      duration_days: p.duration_days,
+      features: buildFeatures(p),
+      popular: false,
+      active: true
+    })
+  }
+  for (const p of realPlans) {
+    merged.push({
+      id: `real-${p.id}`,
+      name: p.name,
+      plan_type: "real",
+      price: p.price,
+      renewal_price: p.price,
+      ram: p.ram,
+      cpu: p.cpu,
+      storage: p.storage,
+      duration_days: p.duration_days,
+      features: buildFeatures(p),
+      popular: false,
+      active: true
+    })
+  }
+  return merged
+}
+
+function buildFeatures(plan) {
+  const features = []
+  features.push(`${plan.ram} GB RAM`)
+  features.push(`${plan.cpu} CPU Core${plan.cpu > 1 ? "s" : ""}`)
+  features.push(`${plan.storage} GB Storage`)
+  if (plan.backup_count > 0) features.push(`${plan.backup_count} Backup${plan.backup_count > 1 ? "s" : ""}`)
+  if (plan.extra_ports > 0) features.push(`${plan.extra_ports} Extra Port${plan.extra_ports > 1 ? "s" : ""}`)
+  features.push(`${plan.duration_days} Day${plan.duration_days > 1 ? "s" : ""} Duration`)
+  return features
 }
 
 // ─── Frontpage sections ───────────────────────────────────────────────────────
@@ -112,22 +151,9 @@ router.put("/:section", validate(sectionSchema), async (req, res, next) => {
   }
 })
 
-// ─── Landing plans ────────────────────────────────────────────────────────────
+// ─── Landing plans (now auto-synced, read-only) ──────────────────────────────
 
-const planSchema = z.object({
-  body: z.object({
-    name: z.string().min(2).max(80),
-    price: z.number().nonnegative(),
-    ram: z.number().int().positive(),
-    cpu: z.number().int().positive(),
-    storage: z.number().int().positive(),
-    features: z.array(z.string()).default([]),
-    popular: z.boolean().default(false),
-    active: z.boolean().default(true)
-  })
-})
-
-// GET /api/admin/landing-plans
+// GET /api/admin/landing-plans — returns merged coin + real plans (read-only preview)
 router.get("/landing-plans", async (req, res, next) => {
   try {
     res.json(await getLandingPlans(true))
@@ -136,98 +162,25 @@ router.get("/landing-plans", async (req, res, next) => {
   }
 })
 
-// POST /api/admin/landing-plans
-router.post("/landing-plans", validate(planSchema), async (req, res, next) => {
-  try {
-    const { name, price, ram, cpu, storage, features, popular, active } = req.body
-    const result = await runSync(
-      `INSERT INTO landing_plans (name, price, ram, cpu, storage, features, popular, active)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [name, price, ram, cpu, storage, JSON.stringify(features), popular ? 1 : 0, active ? 1 : 0]
-    )
-
-    const plan = await getOne("SELECT * FROM landing_plans WHERE id = ?", [result.lastID])
-    const parsed = { ...plan, features: safeParseJSON(plan.features, []), popular: Boolean(plan.popular), active: Boolean(plan.active) }
-
-    emitPlansUpdate(await getLandingPlans(false))
-    res.status(201).json(parsed)
-  } catch (error) {
-    next(error)
-  }
+// POST/PUT/DELETE/PATCH endpoints kept for backward compat but return info message
+router.post("/landing-plans", (req, res) => {
+  res.status(200).json({ message: "Landing plans are now auto-synced from Coin & Real plans. Manage plans from the Admin Panel plans section." })
 })
 
-// PUT /api/admin/landing-plans/:id
-router.put("/landing-plans/:id", validate(planSchema), async (req, res, next) => {
-  try {
-    const { id } = req.params
-    const { name, price, ram, cpu, storage, features, popular, active } = req.body
-
-    const existing = await getOne("SELECT id FROM landing_plans WHERE id = ?", [id])
-    if (!existing) return res.status(404).json({ error: "Plan not found" })
-
-    await runSync(
-      `UPDATE landing_plans SET name=?, price=?, ram=?, cpu=?, storage=?, features=?, popular=?, active=?, updated_at=datetime('now') WHERE id=?`,
-      [name, price, ram, cpu, storage, JSON.stringify(features), popular ? 1 : 0, active ? 1 : 0, id]
-    )
-
-    const plan = await getOne("SELECT * FROM landing_plans WHERE id = ?", [id])
-    const parsed = { ...plan, features: safeParseJSON(plan.features, []), popular: Boolean(plan.popular), active: Boolean(plan.active) }
-
-    emitPlansUpdate(await getLandingPlans(false))
-    res.json(parsed)
-  } catch (error) {
-    next(error)
-  }
+router.put("/landing-plans/:id", (req, res) => {
+  res.status(200).json({ message: "Landing plans are now auto-synced from Coin & Real plans. Manage plans from the Admin Panel plans section." })
 })
 
-// DELETE /api/admin/landing-plans/:id
-router.delete("/landing-plans/:id", async (req, res, next) => {
-  try {
-    const { id } = req.params
-    const existing = await getOne("SELECT id FROM landing_plans WHERE id = ?", [id])
-    if (!existing) return res.status(404).json({ error: "Plan not found" })
-
-    await runSync("DELETE FROM landing_plans WHERE id = ?", [id])
-
-    emitPlansUpdate(await getLandingPlans(false))
-    res.json({ success: true })
-  } catch (error) {
-    next(error)
-  }
+router.delete("/landing-plans/:id", (req, res) => {
+  res.status(200).json({ message: "Landing plans are now auto-synced from Coin & Real plans. Manage plans from the Admin Panel plans section." })
 })
 
-// PATCH /api/admin/landing-plans/:id/toggle-active
-router.patch("/landing-plans/:id/toggle-active", async (req, res, next) => {
-  try {
-    const { id } = req.params
-    const plan = await getOne("SELECT id, active FROM landing_plans WHERE id = ?", [id])
-    if (!plan) return res.status(404).json({ error: "Plan not found" })
-
-    const newActive = plan.active ? 0 : 1
-    await runSync("UPDATE landing_plans SET active=?, updated_at=datetime('now') WHERE id=?", [newActive, id])
-
-    emitPlansUpdate(await getLandingPlans(false))
-    res.json({ success: true, active: Boolean(newActive) })
-  } catch (error) {
-    next(error)
-  }
+router.patch("/landing-plans/:id/toggle-active", (req, res) => {
+  res.status(200).json({ message: "Landing plans are now auto-synced. Use the Admin Panel to manage plans." })
 })
 
-// PATCH /api/admin/landing-plans/:id/toggle-popular
-router.patch("/landing-plans/:id/toggle-popular", async (req, res, next) => {
-  try {
-    const { id } = req.params
-    const plan = await getOne("SELECT id, popular FROM landing_plans WHERE id = ?", [id])
-    if (!plan) return res.status(404).json({ error: "Plan not found" })
-
-    const newPopular = plan.popular ? 0 : 1
-    await runSync("UPDATE landing_plans SET popular=?, updated_at=datetime('now') WHERE id=?", [newPopular, id])
-
-    emitPlansUpdate(await getLandingPlans(false))
-    res.json({ success: true, popular: Boolean(newPopular) })
-  } catch (error) {
-    next(error)
-  }
+router.patch("/landing-plans/:id/toggle-popular", (req, res) => {
+  res.status(200).json({ message: "Landing plans are now auto-synced. Use the Admin Panel to manage plans." })
 })
 
 export default router

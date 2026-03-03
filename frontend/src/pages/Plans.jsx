@@ -226,8 +226,17 @@ export default function Plans() {
                   </div>
                   
                   <div className="border-t border-white/10 pt-4">
-                    <p className={`text-3xl font-extrabold ${isActive ? "text-gradient" : "text-white"}`}>{plan.coin_price}</p>
-                    <p className="text-sm text-slate-500">coins / {plan.duration_days} days</p>
+                    {plan.initial_price === 0 ? (
+                      <>
+                        <p className={`text-3xl font-extrabold ${isActive ? "text-gradient" : "text-green-400"}`}>FREE</p>
+                        <p className="text-sm text-slate-500">first purchase • then {plan.renewal_price || plan.coin_price} coins / {plan.duration_days} days</p>
+                      </>
+                    ) : (
+                      <>
+                        <p className={`text-3xl font-extrabold ${isActive ? "text-gradient" : "text-white"}`}>{plan.initial_price ?? plan.coin_price}</p>
+                        <p className="text-sm text-slate-500">coins first buy{plan.renewal_price && plan.renewal_price !== plan.initial_price ? ` • ${plan.renewal_price} renewal` : ''} / {plan.duration_days} days</p>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -438,7 +447,9 @@ export default function Plans() {
         message={`Deploy "${serverName}" using the ${selectedPlan?.name} plan with ${selectedEgg?.name || 'default software'}?`}
         detail={
           selectedPlan?.type === "coin"
-            ? `This will cost ${selectedPlan?.coin_price} coins for ${selectedPlan?.duration_days} days.`
+            ? (selectedPlan?.initial_price === 0
+                ? `First purchase is FREE! Renewal costs ${selectedPlan?.renewal_price || selectedPlan?.coin_price} coins every ${selectedPlan?.duration_days} days.`
+                : `This will cost ${selectedPlan?.initial_price ?? selectedPlan?.coin_price} coins for ${selectedPlan?.duration_days} days. Renewal: ${selectedPlan?.renewal_price || selectedPlan?.coin_price} coins.`)
             : `This will charge ₹${selectedPlan?.price?.toFixed(2)} for ${selectedPlan?.duration_days} days.`
         }
         confirmLabel="Purchase"

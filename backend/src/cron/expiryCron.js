@@ -12,6 +12,12 @@ function getPrice(planType, plan) {
   return planType === "coin" ? plan.coin_price : plan.price
 }
 
+// Auto-renewal always uses renewal_price for coin plans
+function getRenewalPrice(planType, plan) {
+  if (planType === "coin") return plan.renewal_price ?? plan.coin_price
+  return plan.price
+}
+
 function getBalanceField(planType) {
   return planType === "coin" ? "coins" : "balance"
 }
@@ -40,7 +46,7 @@ async function processExpiring() {
     const plan = await getPlan(server.plan_type, server.plan_id)
     if (!user || !plan) continue
 
-    const price = getPrice(server.plan_type, plan)
+    const price = getRenewalPrice(server.plan_type, plan)
     const balanceField = getBalanceField(server.plan_type)
 
     if (user[balanceField] >= price) {

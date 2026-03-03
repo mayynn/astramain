@@ -243,7 +243,9 @@ export default function AdminPanel() {
         ram: '',
         cpu: '',
         storage: '',
-        [type === 'coin' ? 'coin_price' : 'price']: '',
+        ...(type === 'coin'
+          ? { coin_price: '', initial_price: 0, renewal_price: '' }
+          : { price: '' }),
         duration_type: 'days',
         duration_days: '',
         limited_stock: false,
@@ -276,16 +278,19 @@ export default function AdminPanel() {
         ram: parseInt(planForm.ram),
         cpu: parseInt(planForm.cpu),
         storage: parseInt(planForm.storage),
-        [type === 'coin' ? 'coin_price' : 'price']: parseFloat(planForm[type === 'coin' ? 'coin_price' : 'price']),
         duration_type: planForm.duration_type,
         duration_days: parseInt(planForm.duration_days),
         limited_stock: Boolean(planForm.limited_stock),
         stock_amount: planForm.limited_stock ? parseInt(planForm.stock_amount) : null
       }
 
-      // For coin plans, add one_time_purchase
       if (type === 'coin') {
+        planData.initial_price = parseInt(planForm.initial_price) || 0
+        planData.renewal_price = parseInt(planForm.renewal_price) || 0
+        planData.coin_price = planData.renewal_price // keep coin_price in sync
         planData.one_time_purchase = Boolean(planForm.one_time_purchase)
+      } else {
+        planData.price = parseFloat(planForm.price)
       }
 
       if (mode === 'create') {
@@ -685,7 +690,7 @@ export default function AdminPanel() {
                           {plan.ram}GB RAM • {plan.cpu} CPU • {plan.storage}GB Storage
                         </p>
                         <p className="text-xs text-aurora-300 mt-1">
-                          {plan.coin_price} coins • {plan.duration_days} days
+                          {plan.initial_price === 0 ? 'FREE first buy' : `${plan.initial_price} coins`} → {plan.renewal_price} coins renewal • {plan.duration_days} days
                         </p>
                       </div>
                     </div>
@@ -1074,28 +1079,67 @@ export default function AdminPanel() {
               </div>
 
               {/* Pricing */}
-              <div>
-                <label htmlFor="plan-price" className="block text-sm font-medium text-slate-300 mb-2">
-                  {planModal.type === 'coin' ? 'Coin Price' : 'Price (₹)'}
-                </label>
-                <input
-                  id="plan-price"
-                  name="price"
-                  type="number"
-                  value={planForm[planModal.type === 'coin' ? 'coin_price' : 'price'] || ''}
-                  onChange={(e) =>
-                    setPlanForm({
-                      ...planForm,
-                      [planModal.type === 'coin' ? 'coin_price' : 'price']: e.target.value
-                    })
-                  }
-                  placeholder={planModal.type === 'coin' ? '500' : '299'}
-                  required
-                  min="0"
-                  step="0.01"
-                  className="w-full px-4 py-2 rounded-lg border border-slate-700/50 bg-ink-950/60 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-aurora-500/50"
-                />
-              </div>
+              {planModal.type === 'coin' ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label htmlFor="plan-initial-price" className="block text-sm font-medium text-slate-300 mb-2">
+                      Initial Price (first purchase)
+                    </label>
+                    <input
+                      id="plan-initial-price"
+                      name="initialPrice"
+                      type="number"
+                      value={planForm.initial_price ?? ''}
+                      onChange={(e) =>
+                        setPlanForm({ ...planForm, initial_price: e.target.value })
+                      }
+                      placeholder="0 = FREE"
+                      min="0"
+                      className="w-full px-4 py-2 rounded-lg border border-slate-700/50 bg-ink-950/60 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-aurora-500/50"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">Set to 0 for free first purchase</p>
+                  </div>
+                  <div>
+                    <label htmlFor="plan-renewal-price" className="block text-sm font-medium text-slate-300 mb-2">
+                      Renewal Price (coins)
+                    </label>
+                    <input
+                      id="plan-renewal-price"
+                      name="renewalPrice"
+                      type="number"
+                      value={planForm.renewal_price ?? ''}
+                      onChange={(e) =>
+                        setPlanForm({ ...planForm, renewal_price: e.target.value })
+                      }
+                      placeholder="500"
+                      required
+                      min="0"
+                      className="w-full px-4 py-2 rounded-lg border border-slate-700/50 bg-ink-950/60 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-aurora-500/50"
+                    />
+                    <p className="text-xs text-slate-500 mt-1">Charged on every renewal after first buy</p>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label htmlFor="plan-price" className="block text-sm font-medium text-slate-300 mb-2">
+                    Price (₹)
+                  </label>
+                  <input
+                    id="plan-price"
+                    name="price"
+                    type="number"
+                    value={planForm.price || ''}
+                    onChange={(e) =>
+                      setPlanForm({ ...planForm, price: e.target.value })
+                    }
+                    placeholder="299"
+                    required
+                    min="0"
+                    step="0.01"
+                    className="w-full px-4 py-2 rounded-lg border border-slate-700/50 bg-ink-950/60 text-slate-200 placeholder-slate-500 focus:outline-none focus:border-aurora-500/50"
+                  />
+                </div>
+              )}
 
               {/* Duration */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

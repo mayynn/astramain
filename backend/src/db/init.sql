@@ -26,6 +26,8 @@ CREATE TABLE IF NOT EXISTS plans_coin (
   cpu INTEGER NOT NULL,
   storage INTEGER NOT NULL,
   coin_price INTEGER NOT NULL,
+  initial_price INTEGER NOT NULL DEFAULT 0,
+  renewal_price INTEGER NOT NULL DEFAULT 0,
   duration_type TEXT NOT NULL CHECK (duration_type IN ('weekly', 'monthly', 'custom', 'days', 'lifetime')),
   duration_days INTEGER NOT NULL,
   limited_stock INTEGER NOT NULL DEFAULT 0,

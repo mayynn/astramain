@@ -17,7 +17,9 @@ const coinPlanSchema = z.object({
     ram: z.number().int().positive(),
     cpu: z.number().int().positive(),
     storage: z.number().int().positive(),
-    coin_price: z.number().int().positive(),
+    coin_price: z.number().int().min(0),
+    initial_price: z.number().int().min(0).default(0),
+    renewal_price: z.number().int().min(0).default(0),
     duration_type: z.enum(["weekly", "monthly", "custom", "days", "lifetime"]),
     duration_days: z.number().int().positive(),
     limited_stock: z.boolean().default(false),
@@ -180,7 +182,7 @@ router.delete("/users/:id", async (req, res, next) => {
 router.post("/plans/coin", validate(coinPlanSchema), async (req, res, next) => {
   try {
     const info = await runSync(
-      "INSERT INTO plans_coin (name, icon, ram, cpu, storage, coin_price, duration_type, duration_days, limited_stock, stock_amount, one_time_purchase, backup_count, extra_ports) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      "INSERT INTO plans_coin (name, icon, ram, cpu, storage, coin_price, initial_price, renewal_price, duration_type, duration_days, limited_stock, stock_amount, one_time_purchase, backup_count, extra_ports) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
       [
         req.body.name,
         req.body.icon || "Package",
@@ -188,6 +190,8 @@ router.post("/plans/coin", validate(coinPlanSchema), async (req, res, next) => {
         req.body.cpu,
         req.body.storage,
         req.body.coin_price,
+        req.body.initial_price ?? 0,
+        req.body.renewal_price ?? req.body.coin_price,
         req.body.duration_type,
         req.body.duration_days,
         req.body.limited_stock ? 1 : 0,
@@ -233,7 +237,7 @@ router.post("/plans/real", validate(realPlanSchema), async (req, res, next) => {
 router.put("/plans/coin/:id", validate(coinPlanSchema), async (req, res, next) => {
   try {
     await runSync(
-      "UPDATE plans_coin SET name = ?, icon = ?, ram = ?, cpu = ?, storage = ?, coin_price = ?, duration_type = ?, duration_days = ?, limited_stock = ?, stock_amount = ?, one_time_purchase = ?, backup_count = ?, extra_ports = ? WHERE id = ?",
+      "UPDATE plans_coin SET name = ?, icon = ?, ram = ?, cpu = ?, storage = ?, coin_price = ?, initial_price = ?, renewal_price = ?, duration_type = ?, duration_days = ?, limited_stock = ?, stock_amount = ?, one_time_purchase = ?, backup_count = ?, extra_ports = ? WHERE id = ?",
       [
         req.body.name,
         req.body.icon || "Package",
@@ -241,6 +245,8 @@ router.put("/plans/coin/:id", validate(coinPlanSchema), async (req, res, next) =
         req.body.cpu,
         req.body.storage,
         req.body.coin_price,
+        req.body.initial_price ?? 0,
+        req.body.renewal_price ?? req.body.coin_price,
         req.body.duration_type,
         req.body.duration_days || null,
         req.body.limited_stock ? 1 : 0,

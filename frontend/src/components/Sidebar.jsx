@@ -9,6 +9,7 @@ const navItems = [
   { to: "/servers", label: "Servers", icon: Server },
   { to: "/billing", label: "Billing", icon: CreditCard },
   { to: "/coins", label: "Coins", icon: Coins },
+  { to: "/coupons", label: "Redeem Code", icon: Ticket },
   { to: "/support", label: "Support", icon: LifeBuoy }
 ]
 

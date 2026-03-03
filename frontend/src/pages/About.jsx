@@ -30,16 +30,47 @@ const DEFAULT_DATA = {
   ]
 }
 
+// Convert stats from admin object format {servers, countries, ...} to array [{label, value}, ...]
+function normalizeStats(stats) {
+  if (Array.isArray(stats)) return stats
+  if (stats && typeof stats === "object") {
+    const labelMap = { servers: "Servers Active", countries: "Countries Served", uptime: "Uptime", players: "Satisfied Players" }
+    return Object.entries(stats)
+      .filter(([, v]) => v)
+      .map(([key, value]) => ({ label: labelMap[key] || key, value }))
+  }
+  return DEFAULT_DATA.stats
+}
+
 export default function About() {
   const [data, setData] = useState(DEFAULT_DATA)
 
   useEffect(() => {
-    api.getFrontpage()
-      .then((res) => {
-        const section = res?.about_page?.data
-        if (section && typeof section === "object") setData({ ...DEFAULT_DATA, ...section })
-      })
-      .catch(() => {})
+    // Load frontpage CMS content and live stats in parallel
+    Promise.all([
+      api.getFrontpage().catch(() => null),
+      api.getStats().catch(() => null)
+    ]).then(([res, liveStats]) => {
+      const section = res?.about_page?.data
+      const merged = section && typeof section === "object"
+        ? { ...DEFAULT_DATA, ...section }
+        : { ...DEFAULT_DATA }
+
+      // Merge live DB stats into the stats array
+      if (liveStats) {
+        merged.stats = [
+          { label: "Servers Active", value: String(liveStats.activeServers ?? 0) },
+          { label: "Satisfied Players", value: String(liveStats.totalUsers ?? 0) },
+          { label: "Uptime", value: merged.stats?.find?.(s => s.label === "Uptime")?.value || "99.9%" },
+          { label: "Countries Served", value: merged.stats?.find?.(s => s.label === "Countries Served")?.value || "20+" }
+        ]
+      } else {
+        // Normalize stats so .map() always works
+        merged.stats = normalizeStats(merged.stats)
+      }
+
+      setData(merged)
+    })
   }, [])
 
   return (

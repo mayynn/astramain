@@ -1,7 +1,7 @@
 /**
  * Public frontpage routes
  * GET /api/frontpage          — all site_content sections
- * GET /api/landing-plans      — active landing plans
+ * GET /api/landing-plans      — active plans (auto-synced from plans_coin + plans_real)
  */
 import { Router } from "express"
 import { query, getOne } from "../config/db.js"
@@ -32,27 +32,66 @@ router.get("/", async (req, res, next) => {
 })
 
 // ─── GET /api/landing-plans ──────────────────────────────────────────────────
+// Auto-synced: merges plans_coin + plans_real into a unified landing format.
+// No separate landing_plans table needed.
 router.get("/landing-plans", async (req, res, next) => {
   try {
-    const plans = await query(
-      "SELECT * FROM landing_plans WHERE active = 1 ORDER BY popular DESC, price ASC"
-    )
+    const coinPlans = await query("SELECT * FROM plans_coin ORDER BY coin_price ASC")
+    const realPlans = await query("SELECT * FROM plans_real ORDER BY price ASC")
 
-    const parsed = plans.map((p) => ({
-      ...p,
-      features: safeParseJSON(p.features, []),
-      popular: Boolean(p.popular),
-      active: Boolean(p.active)
-    }))
+    const merged = []
 
-    res.json(parsed)
+    for (const p of coinPlans) {
+      merged.push({
+        id: `coin-${p.id}`,
+        name: p.name,
+        plan_type: "coin",
+        price: p.initial_price ?? p.coin_price,
+        renewal_price: p.renewal_price ?? p.coin_price,
+        ram: p.ram,
+        cpu: p.cpu,
+        storage: p.storage,
+        duration_days: p.duration_days,
+        duration_type: p.duration_type,
+        features: buildFeatures(p),
+        popular: false,
+        active: true
+      })
+    }
+
+    for (const p of realPlans) {
+      merged.push({
+        id: `real-${p.id}`,
+        name: p.name,
+        plan_type: "real",
+        price: p.price,
+        renewal_price: p.price,
+        ram: p.ram,
+        cpu: p.cpu,
+        storage: p.storage,
+        duration_days: p.duration_days,
+        duration_type: p.duration_type,
+        features: buildFeatures(p),
+        popular: false,
+        active: true
+      })
+    }
+
+    res.json(merged)
   } catch (error) {
     next(error)
   }
 })
 
-function safeParseJSON(str, fallback) {
-  try { return JSON.parse(str) } catch { return fallback }
+function buildFeatures(plan) {
+  const features = []
+  features.push(`${plan.ram} GB RAM`)
+  features.push(`${plan.cpu} CPU Core${plan.cpu > 1 ? "s" : ""}`)
+  features.push(`${plan.storage} GB Storage`)
+  if (plan.backup_count > 0) features.push(`${plan.backup_count} Backup${plan.backup_count > 1 ? "s" : ""}`)
+  if (plan.extra_ports > 0) features.push(`${plan.extra_ports} Extra Port${plan.extra_ports > 1 ? "s" : ""}`)
+  features.push(`${plan.duration_days} Day${plan.duration_days > 1 ? "s" : ""} Duration`)
+  return features
 }
 
 export default router

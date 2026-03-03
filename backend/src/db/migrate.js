@@ -195,6 +195,28 @@ export default async function migrate() {
 
     console.log("[Migration] ✓ server_backups table ensured")
 
+    // ── Coin plan dual pricing: initial_price (first purchase) + renewal_price ──
+    try {
+      await runSync("ALTER TABLE plans_coin ADD COLUMN initial_price INTEGER NOT NULL DEFAULT 0")
+      console.log("[Migration] ✓ Added initial_price column to plans_coin")
+    } catch {
+      // Column already exists
+    }
+    try {
+      await runSync("ALTER TABLE plans_coin ADD COLUMN renewal_price INTEGER NOT NULL DEFAULT 0")
+      console.log("[Migration] ✓ Added renewal_price column to plans_coin")
+    } catch {
+      // Column already exists
+    }
+    // Back-fill: set renewal_price = coin_price for existing rows where renewal_price is 0
+    try {
+      await runSync("UPDATE plans_coin SET renewal_price = coin_price WHERE renewal_price = 0 AND coin_price > 0")
+      await runSync("UPDATE plans_coin SET initial_price = coin_price WHERE initial_price = 0 AND coin_price > 0")
+      console.log("[Migration] ✓ Back-filled initial_price & renewal_price from coin_price")
+    } catch (e) {
+      console.warn("[Migration] Back-fill warn:", e.message)
+    }
+
     // Seed default site_content sections
     console.log("[Migration] Seeding default site_content...")
     for (const section of DEFAULT_SITE_CONTENT) {

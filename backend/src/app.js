@@ -68,7 +68,9 @@ app.use(helmet({
         "https://pl28771198.effectivegatecpm.com",
         "https://environmenttalentrabble.com",
         "https://preferencenail.com",
-        "https://weirdopt.com"
+        "https://weirdopt.com",
+        "https://static.cloudflareinsights.com",
+        "https://challenges.cloudflare.com"
       ],
       styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
       fontSrc: ["'self'", "https://fonts.gstatic.com"],
@@ -121,6 +123,7 @@ app.use(passport.initialize())
 app.use(passport.session())
 
 // Serve uploaded assets statically (favicons/backgrounds/tickets)
+// Site assets (logo, favicon, background) are stored in backend/public/uploads/
 const uploadsPath = join(__dirname, "../public/uploads")
 app.use("/uploads", express.static(uploadsPath, {
   maxAge: "1h",
@@ -129,6 +132,18 @@ app.use("/uploads", express.static(uploadsPath, {
     res.set("Cache-Control", "public, max-age=3600")
   }
 }))
+
+// Also serve from the UPLOAD_DIR if configured (production may use a different path)
+if (env.UPLOAD_DIR && env.UPLOAD_DIR !== "./uploads") {
+  app.use("/uploads", express.static(env.UPLOAD_DIR, {
+    maxAge: "1h",
+    setHeaders: (res) => {
+      res.set("X-Content-Type-Options", "nosniff")
+      res.set("Cache-Control", "public, max-age=3600")
+    }
+  }))
+  console.log("[Server] Also serving uploads from UPLOAD_DIR:", env.UPLOAD_DIR)
+}
 console.log("[Server] Serving static files from:", uploadsPath)
 
 app.get("/health", (req, res) => {

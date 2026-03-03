@@ -39,6 +39,18 @@ function getPrice(planType, plan) {
   return planType === "coin" ? plan.coin_price : plan.price
 }
 
+// Purchase price: coin plans use initial_price (can be 0 = free first buy)
+function getPurchasePrice(planType, plan) {
+  if (planType === "coin") return plan.initial_price ?? plan.coin_price
+  return plan.price
+}
+
+// Renewal price: coin plans use renewal_price
+function getRenewalPrice(planType, plan) {
+  if (planType === "coin") return plan.renewal_price ?? plan.coin_price
+  return plan.price
+}
+
 function getBalanceField(planType) {
   return planType === "coin" ? "coins" : "balance"
 }
@@ -63,7 +75,7 @@ router.get("/", requireAuth, async (req, res, next) => {
     const enriched = await Promise.all(
       servers.map(async (server) => {
         const plan = await getPlan(server.plan_type, server.plan_id)
-        const renewalCost = plan ? getPrice(server.plan_type, plan) : 0
+        const renewalCost = plan ? getRenewalPrice(server.plan_type, plan) : 0
         
         // Fetch server details from Pterodactyl to get IP, port, and node FQDN
         let pteroDetails = null
@@ -131,14 +143,16 @@ router.post("/purchase", requireAuth, purchaseLimiter, validate(purchaseSchema),
         if (existing) throw Object.assign(new Error("You already have an active server with this one-time purchase plan."), { statusCode: 400 })
       }
 
-      const price = getPrice(planType, plan)
+      const price = getPurchasePrice(planType, plan)
       const balanceField = getBalanceField(planType)
-      if (user[balanceField] < price) {
+      if (price > 0 && user[balanceField] < price) {
         throw Object.assign(new Error("Insufficient balance"), { statusCode: 400 })
       }
 
-      // Deduct balance atomically
-      runSync(`UPDATE users SET ${balanceField} = ${balanceField} - ? WHERE id = ?`, [price, req.user.id])
+      // Deduct balance atomically (skip if price is 0 = free first purchase)
+      if (price > 0) {
+        runSync(`UPDATE users SET ${balanceField} = ${balanceField} - ? WHERE id = ?`, [price, req.user.id])
+      }
 
       if (plan.limited_stock) {
         runSync(`UPDATE ${table} SET stock_amount = stock_amount - 1 WHERE id = ?`, [planId])
@@ -201,8 +215,10 @@ router.post("/purchase", requireAuth, purchaseLimiter, validate(purchaseSchema),
       // Refund the balance if Pterodactyl fails — wrap in try/catch so refund errors are logged
       try {
         const balanceField = getBalanceField(planType)
-        const price = getPrice(planType, plan)
-        await runSync(`UPDATE users SET ${balanceField} = ${balanceField} + ? WHERE id = ?`, [price, req.user.id])
+        const price = getPurchasePrice(planType, plan)
+        if (price > 0) {
+          await runSync(`UPDATE users SET ${balanceField} = ${balanceField} + ? WHERE id = ?`, [price, req.user.id])
+        }
         if (plan.limited_stock) {
           const table = planType === "coin" ? "plans_coin" : "plans_real"
           await runSync(`UPDATE ${table} SET stock_amount = stock_amount + 1 WHERE id = ?`, [planId])
@@ -251,7 +267,7 @@ router.post("/renew", requireAuth, purchaseLimiter, validate(renewSchema), async
       const user = getOne("SELECT id, coins, balance, pterodactyl_user_id FROM users WHERE id = ?", [req.user.id])
       if (!plan || !user) throw Object.assign(new Error("Missing data"), { statusCode: 404 })
 
-      const price = getPrice(server.plan_type, plan)
+      const price = getRenewalPrice(server.plan_type, plan)
       const balanceField = getBalanceField(server.plan_type)
       if (user[balanceField] < price) throw Object.assign(new Error("Insufficient balance"), { statusCode: 400 })
 
