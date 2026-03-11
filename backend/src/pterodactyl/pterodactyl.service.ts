@@ -77,6 +77,42 @@ export class PterodactylService {
     return res.data.attributes.id;
   }
 
+  async getUser(pterodactylUserId: number): Promise<{ id: number; username: string; email: string }> {
+    const res = await this.withRetry(() => this.api.get(`/users/${pterodactylUserId}`));
+    const attr = res.data.attributes;
+    return { id: attr.id, username: attr.username, email: attr.email };
+  }
+
+  async updateUserPassword(pterodactylUserId: number, password: string): Promise<void> {
+    // Pterodactyl requires email + username when updating a user.
+    const user = await this.getUser(pterodactylUserId);
+    await this.withRetry(() =>
+      this.api.patch(`/users/${pterodactylUserId}`, {
+        email: user.email,
+        username: user.username,
+        first_name: user.username,
+        last_name: 'User',
+        password,
+      }),
+    );
+  }
+
+  async getNodeSftpPort(nodeId: number): Promise<number> {
+    try {
+      const cfgRes = await this.withRetry(() =>
+        this.api.get(`/nodes/${nodeId}/configuration`),
+      );
+      return cfgRes.data?.system?.sftp?.bind_port || 2022;
+    } catch {
+      return 2022;
+    }
+  }
+
+  async getNodeDaemonPublic(nodeId: number): Promise<{ fqdn: string }> {
+    const nodeRes = await this.withRetry(() => this.api.get(`/nodes/${nodeId}`));
+    return { fqdn: nodeRes.data.attributes.fqdn };
+  }
+
   async getUserByEmail(email: string): Promise<number | null> {
     try {
       const res = await this.api.get(`/users?filter[email]=${encodeURIComponent(email)}`);
@@ -167,11 +203,14 @@ export class PterodactylService {
     return res.data.attributes;
   }
 
-  async selectBestNode(locationId?: number): Promise<{ nodeId: number; allocationId: number }> {
+  async selectBestNode(locationId?: number, allowedNodeIds?: number[]): Promise<{ nodeId: number; allocationId: number }> {
     const nodes = await this.getNodes();
-    const filtered = locationId
+    let filtered = locationId
       ? nodes.filter((n: any) => n.attributes.location_id === locationId)
       : nodes;
+    if (allowedNodeIds && allowedNodeIds.length > 0) {
+      filtered = filtered.filter((n: any) => allowedNodeIds.includes(n.attributes.id));
+    }
 
     let best: any = null;
     let bestScore = -1;

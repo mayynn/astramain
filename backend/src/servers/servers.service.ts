@@ -11,6 +11,7 @@ import { ConfigService } from '@nestjs/config';
 import { PlanType, ServerStatus, PlanCategory } from '@prisma/client';
 import { PurchaseServerDto } from './dto/server.dto';
 import { addDays } from '../utils/date.util';
+import { AffiliateService } from '../affiliate/affiliate.service';
 
 const DEFAULT_PAGE_SIZE = 10;
 const MAX_PAGE_SIZE = 50;
@@ -21,12 +22,29 @@ export class ServersService {
     private prisma: PrismaService,
     private pterodactyl: PterodactylService,
     private config: ConfigService,
+    private affiliateService: AffiliateService,
   ) {}
 
-  async getAvailableNodes() {
+  async getAvailableNodes(planType?: string, planId?: number) {
     const nodes = await this.pterodactyl.getNodes();
+
+    // Check if plan has specific node allocations
+    let allowedNodeIds: number[] | null = null;
+    if (planType && planId) {
+      const allocations = await this.prisma.planNodeAllocation.findMany({
+        where: planType === 'coin'
+          ? { planType: 'coin', planCoinId: planId }
+          : { planType: 'real', planRealId: planId },
+        select: { nodeId: true },
+      });
+      if (allocations.length > 0) {
+        allowedNodeIds = allocations.map((a) => a.nodeId);
+      }
+    }
+
     return nodes
       .filter((n: any) => n.attributes.public)
+      .filter((n: any) => !allowedNodeIds || allowedNodeIds.includes(n.attributes.id))
       .map((n: any) => {
         const allocations = n.attributes.relationships?.allocations?.data || [];
         const freeAllocations = allocations.filter((a: any) => !a.attributes.assigned).length;
@@ -189,6 +207,17 @@ export class ServersService {
     // Select node & allocation
     let allocationId: number | undefined;
     if (dto.nodeId) {
+      // Validate node is allowed for this plan
+      const allowedNodes = await this.prisma.planNodeAllocation.findMany({
+        where: dto.planType === 'coin'
+          ? { planType: 'coin', planCoinId: dto.planId }
+          : { planType: 'real', planRealId: dto.planId },
+        select: { nodeId: true },
+      });
+      if (allowedNodes.length > 0 && !allowedNodes.some((n) => n.nodeId === dto.nodeId)) {
+        await this.refundUser(userId, dto.planType, costCoins, costBalance);
+        throw new BadRequestException('Selected node is not available for this plan');
+      }
       try {
         allocationId = await this.pterodactyl.findFreeAllocation(dto.nodeId);
       } catch {
@@ -197,7 +226,14 @@ export class ServersService {
       }
     } else {
       try {
-        const best = await this.pterodactyl.selectBestNode();
+        const allowedNodes = await this.prisma.planNodeAllocation.findMany({
+          where: dto.planType === 'coin'
+            ? { planType: 'coin', planCoinId: dto.planId }
+            : { planType: 'real', planRealId: dto.planId },
+          select: { nodeId: true },
+        });
+        const allowedIds = allowedNodes.length > 0 ? allowedNodes.map((n) => n.nodeId) : undefined;
+        const best = await this.pterodactyl.selectBestNode(undefined, allowedIds);
         allocationId = best.allocationId;
       } catch {
         await this.refundUser(userId, dto.planType, costCoins, costBalance);
@@ -283,6 +319,11 @@ export class ServersService {
         eggId,
       },
     });
+
+    // Record affiliate commission for paid plan purchases
+    if (dto.planType === 'real' && costBalance && costBalance > 0) {
+      this.affiliateService.recordPurchaseCommission(userId, costBalance, plan.name).catch(() => {});
+    }
 
     const payload = { server };
 
@@ -398,7 +439,7 @@ export class ServersService {
     const username = email.split('@')[0].replace(/[^a-zA-Z0-9-]/g, '').slice(0, 20) || `user${Date.now()}`;
     const password = randomBytes(24).toString('base64url');
     const pteroId = await this.pterodactyl.createUser({ email, username, firstName: username, lastName: 'User', password });
-    await this.prisma.user.update({ where: { id: userId }, data: { pterodactylUserId: pteroId } });
+    await this.prisma.user.update({ where: { id: userId }, data: { pterodactylUserId: pteroId, pterodactylPassword: password } });
     return pteroId;
   }
 }

@@ -54,13 +54,29 @@ export default function CoinsPage() {
       setBalance(r.data.balance);
       setEarn(null);
       setSecondsLeft(0);
-      // Start next session after claim
       setTimeout(startSession, 1000);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
       toast.error(msg ?? 'Failed to claim coins');
     } finally {
       setClaiming(false);
+    }
+  }
+
+  async function redeemCoupon() {
+    if (!redeemCode.trim()) return;
+    setRedeeming(true);
+    try {
+      const r = await api.post<{ coinsAwarded: number }>('/coupons/redeem', { code: redeemCode.trim() });
+      toast.success(`+${r.data.coinsAwarded} coins redeemed!`);
+      setRedeemCode('');
+      // Refresh balance
+      api.get<{ balance: number }>('/coins/balance').then((res) => setBalance(res.data.balance)).catch(() => {});
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message;
+      toast.error(msg ?? 'Invalid or expired code');
+    } finally {
+      setRedeeming(false);
     }
   }
 
@@ -81,6 +97,7 @@ export default function CoinsPage() {
         <p className="mt-1 text-sm text-gray-500">coins</p>
       </div>
 
+      {/* Earn timer */}
       <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-8 text-center">
         {earn ? (
           <>

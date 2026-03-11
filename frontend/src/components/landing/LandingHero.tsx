@@ -1,6 +1,29 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { api } from '@/lib/api';
+
+const DEFAULTS = {
+  badge: 'Powered by Pterodactyl',
+  headingBefore: 'Hosting crafted for',
+  headingHighlight: 'Minecraft empires.',
+  subtitle: 'Deploy powerful game servers instantly with enterprise infrastructure and gamer-friendly pricing.',
+  primaryBtn: 'Deploy Server',
+  primaryLink: '/login',
+  secondaryBtn: 'View Plans',
+  secondaryLink: '#plans',
+};
 
 export function LandingHero() {
+  const [d, setD] = useState(DEFAULTS);
+
+  useEffect(() => {
+    api.get('/site/frontpage/hero').then((r) => {
+      if (r.data && typeof r.data === 'object') setD((prev) => ({ ...prev, ...r.data }));
+    }).catch(() => {});
+  }, []);
+
   return (
     <section className="relative overflow-hidden py-24 lg:py-36">
       {/* Background effects */}
@@ -22,33 +45,33 @@ export function LandingHero() {
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#ff7a18] opacity-75" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-[#ff7a18]" />
               </span>
-              Powered by Pterodactyl
+              {d.badge}
             </div>
 
             {/* Heading */}
             <h1 className="animate-fade-in-up text-5xl font-extrabold leading-[1.08] tracking-tight sm:text-6xl lg:text-7xl">
-              Hosting crafted for{' '}
-              <span className="text-gradient animate-gradient">Minecraft empires.</span>
+              {d.headingBefore}{' '}
+              <span className="text-gradient animate-gradient">{d.headingHighlight}</span>
             </h1>
 
             {/* Subtext */}
             <p className="animate-fade-in-up-d1 mt-6 max-w-xl text-lg leading-relaxed text-gray-400 md:text-xl">
-              Deploy powerful game servers instantly with enterprise infrastructure and gamer-friendly pricing.
+              {d.subtitle}
             </p>
 
             {/* Buttons */}
             <div className="animate-fade-in-up-d2 mt-10 flex flex-wrap gap-4">
               <Link
-                href="/login"
+                href={d.primaryLink}
                 className="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-[#ff7a18] to-orange-500 px-8 py-3.5 text-base font-semibold text-white shadow-lg shadow-[#ff7a18]/25 transition-all duration-200 hover:from-[#ff8c3a] hover:to-orange-400 hover:shadow-xl hover:shadow-[#ff7a18]/40"
               >
-                Deploy Server
+                {d.primaryBtn}
               </Link>
               <Link
-                href="#plans"
+                href={d.secondaryLink}
                 className="inline-flex items-center justify-center rounded-xl border border-gray-700 bg-white/5 px-8 py-3.5 text-base font-semibold text-gray-200 transition-all duration-200 hover:border-gray-600 hover:bg-white/10"
               >
-                View Plans
+                {d.secondaryBtn}
               </Link>
             </div>
           </div>

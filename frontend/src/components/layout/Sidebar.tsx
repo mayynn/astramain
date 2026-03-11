@@ -5,14 +5,16 @@ import { usePathname } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { cn } from '@/lib/cn';
 import {
-  LayoutDashboard, Server, CreditCard, Ticket, Coins, Settings, ShieldCheck,
+  LayoutDashboard, Server, CreditCard, Ticket, Coins, Settings, ShieldCheck, Gift, Tag,
 } from 'lucide-react';
 
 const NAV = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/plans', label: 'Plans', icon: Server },
   { href: '/coins', label: 'Coins', icon: Coins },
+  { href: '/redeem', label: 'Redeem Code', icon: Tag },
   { href: '/billing', label: 'Billing', icon: CreditCard },
+  { href: '/affiliate', label: 'Affiliate', icon: Gift },
   { href: '/tickets', label: 'Support', icon: Ticket },
   { href: '/settings', label: 'Settings', icon: Settings },
 ];

@@ -1,7 +1,10 @@
 import {
   Controller, Get, Post, Put, Patch, Delete, Param, Body, Query,
-  UseGuards, ParseIntPipe, HttpCode, Req,
+  UseGuards, ParseIntPipe, HttpCode, Req, UseInterceptors, UploadedFile, BadRequestException,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname } from 'path';
 import { AdminService } from './admin.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { AdminGuard } from '../auth/guards/admin.guard';
@@ -22,13 +25,80 @@ export class AdminController {
   // ── Users ───────────────────────────────────────────────────────────────────
 
   @Get('users')
-  users(@Query('page') page = 1, @Query('limit') limit = 20, @Query('search') search?: string) {
+  users(@Query('page') page = 1, @Query('limit') limit = 30, @Query('search') search?: string) {
     return this.adminService.getUsers(+page, +limit, search);
   }
 
   @Patch('users/:id')
   updateUser(@Param('id', ParseIntPipe) id: number, @Body() data: any) {
     return this.adminService.updateUser(id, data);
+  }
+
+  @Delete('users/:id')
+  deleteUser(@Param('id', ParseIntPipe) id: number, @CurrentUser() admin: any, @Req() req: any) {
+    this.adminService.logAction(admin.id, 'user_deleted', 'user', id, undefined, req.ip);
+    return this.adminService.deleteUser(id);
+  }
+
+  @Get('users/:id/servers')
+  getUserServers(@Param('id', ParseIntPipe) id: number) {
+    return this.adminService.getUserServers(id);
+  }
+
+  // ── Admin Servers ───────────────────────────────────────────────────────────
+
+  @Get('servers')
+  servers(@Query('page') page = 1, @Query('limit') limit = 30, @Query('search') search?: string) {
+    return this.adminService.getAdminServers(+page, +limit, search);
+  }
+
+  @Get('servers/sync')
+  syncServers() {
+    return this.adminService.syncServersWithPterodactyl();
+  }
+
+  @Get('servers/:id')
+  getServer(@Param('id', ParseIntPipe) id: number) {
+    return this.adminService.adminGetServer(id);
+  }
+
+  @Post('servers/:id/suspend')
+  @HttpCode(200)
+  suspendServer(@Param('id', ParseIntPipe) id: number, @CurrentUser() admin: any, @Req() req: any) {
+    this.adminService.logAction(admin.id, 'server_suspended', 'server', id, undefined, req.ip);
+    return this.adminService.adminSuspendServer(id);
+  }
+
+  @Post('servers/:id/unsuspend')
+  @HttpCode(200)
+  unsuspendServer(@Param('id', ParseIntPipe) id: number, @CurrentUser() admin: any, @Req() req: any) {
+    this.adminService.logAction(admin.id, 'server_unsuspended', 'server', id, undefined, req.ip);
+    return this.adminService.adminUnsuspendServer(id);
+  }
+
+  @Delete('servers/:id')
+  deleteServer(@Param('id', ParseIntPipe) id: number, @CurrentUser() admin: any, @Req() req: any) {
+    this.adminService.logAction(admin.id, 'server_deleted', 'server', id, undefined, req.ip);
+    return this.adminService.adminDeleteServer(id);
+  }
+
+  // ── Node Allocations ────────────────────────────────────────────────────────
+
+  @Get('node-allocations')
+  getAllNodeAllocations() { return this.adminService.getAllNodeAllocations(); }
+
+  @Get('node-allocations/:planType/:planId')
+  getNodeAllocations(@Param('planType') planType: string, @Param('planId', ParseIntPipe) planId: number) {
+    return this.adminService.getNodeAllocations(planType, planId);
+  }
+
+  @Put('node-allocations/:planType/:planId')
+  setNodeAllocations(
+    @Param('planType') planType: string,
+    @Param('planId', ParseIntPipe) planId: number,
+    @Body('nodes') nodes: { nodeId: number; nodeName?: string }[],
+  ) {
+    return this.adminService.setNodeAllocations(planType, planId, nodes);
   }
 
   // ── Plans ───────────────────────────────────────────────────────────────────
@@ -95,6 +165,12 @@ export class AdminController {
   @HttpCode(200)
   closeTicket(@Param('id', ParseIntPipe) id: number) { return this.adminService.closeTicket(id); }
 
+  @Patch('tickets/:id/status')
+  @HttpCode(200)
+  updateTicketStatus(@Param('id', ParseIntPipe) id: number, @Body('status') status: string) {
+    return this.adminService.updateTicketStatus(id, status);
+  }
+
   // ── UTR ─────────────────────────────────────────────────────────────────────
 
   @Get('utr')
@@ -134,5 +210,80 @@ export class AdminController {
   @Put('settings/coins')
   updateCoinSettings(@Body('coinsPerMinute', ParseIntPipe) coinsPerMinute: number) {
     return this.adminService.updateCoinSettings(coinsPerMinute);
+  }
+
+  // ── Popup Messages ──────────────────────────────────────────────────────────
+
+  @Get('popups')
+  getPopups() { return this.adminService.getPopups(); }
+
+  @Post('popups')
+  @UseInterceptors(
+    FileInterceptor('image', {
+      storage: diskStorage({
+        destination: process.env.UPLOAD_DIR || './uploads',
+        filename: (_req, file, cb) => {
+          const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+          cb(null, `popup-${unique}${extname(file.originalname)}`);
+        },
+      }),
+      limits: { fileSize: 5 * 1024 * 1024 },
+      fileFilter: (_req, file, cb) => {
+        if (!file.mimetype.startsWith('image/')) return cb(new BadRequestException('Only images allowed'), false);
+        cb(null, true);
+      },
+    }),
+  )
+  createPopup(@Body() data: any, @UploadedFile() file?: Express.Multer.File) {
+    if (file) data.imageUrl = `/uploads/${file.filename}`;
+    return this.adminService.createPopup(data);
+  }
+
+  @Put('popups/:id')
+  @UseInterceptors(
+    FileInterceptor('image', {
+      storage: diskStorage({
+        destination: process.env.UPLOAD_DIR || './uploads',
+        filename: (_req, file, cb) => {
+          const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+          cb(null, `popup-${unique}${extname(file.originalname)}`);
+        },
+      }),
+      limits: { fileSize: 5 * 1024 * 1024 },
+      fileFilter: (_req, file, cb) => {
+        if (!file.mimetype.startsWith('image/')) return cb(new BadRequestException('Only images allowed'), false);
+        cb(null, true);
+      },
+    }),
+  )
+  updatePopup(@Param('id', ParseIntPipe) id: number, @Body() data: any, @UploadedFile() file?: Express.Multer.File) {
+    if (file) data.imageUrl = `/uploads/${file.filename}`;
+    return this.adminService.updatePopup(id, data);
+  }
+
+  @Delete('popups/:id')
+  deletePopup(@Param('id', ParseIntPipe) id: number) { return this.adminService.deletePopup(id); }
+
+  // ── Site Settings (with image upload) ───────────────────────────────────────
+
+  @Put('site/settings')
+  @UseInterceptors(
+    FileInterceptor('image', {
+      storage: diskStorage({
+        destination: process.env.UPLOAD_DIR || './uploads',
+        filename: (_req, file, cb) => {
+          const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+          cb(null, `site-${unique}${extname(file.originalname)}`);
+        },
+      }),
+      limits: { fileSize: 5 * 1024 * 1024 },
+      fileFilter: (_req, file, cb) => {
+        if (!file.mimetype.startsWith('image/')) return cb(new BadRequestException('Only images allowed'), false);
+        cb(null, true);
+      },
+    }),
+  )
+  updateSiteSettings(@Body() data: any, @UploadedFile() file?: Express.Multer.File) {
+    return this.adminService.updateSiteSettings(data, file?.filename);
   }
 }

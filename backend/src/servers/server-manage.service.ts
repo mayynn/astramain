@@ -209,6 +209,52 @@ export class ServerManageService {
     }));
   }
 
+  // ── SFTP ─────────────────────────────────────────────────────────────────
+
+  async getSftpDetails(serverId: number, userId: number) {
+    const server = await this.getServer(serverId, userId);
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { pterodactylUserId: true, pterodactylPassword: true },
+    });
+    if (!user?.pterodactylUserId) throw new NotFoundException('Pterodactyl account not provisioned');
+
+    const [serverInfo, pteroUser] = await Promise.all([
+      this.pterodactyl.getServerInfo(this.pid(server)),
+      this.pterodactyl.getUser(user.pterodactylUserId),
+    ]);
+
+    const daemon = await this.pterodactyl.getNodeDaemonPublic(serverInfo.node);
+    const sftpPort = await this.pterodactyl.getNodeSftpPort(serverInfo.node);
+
+    return {
+      host: daemon.fqdn,
+      port: sftpPort,
+      username: `${pteroUser.username}.${serverInfo.uuid}`,
+      password: user.pterodactylPassword || null,
+    };
+  }
+
+  async resetSftpPassword(serverId: number, userId: number) {
+    const server = await this.getServer(serverId, userId);
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { pterodactylUserId: true },
+    });
+    if (!user?.pterodactylUserId) throw new NotFoundException('Pterodactyl account not provisioned');
+
+    const { randomBytes } = await import('crypto');
+    const newPassword = randomBytes(24).toString('base64url');
+
+    await this.pterodactyl.updateUserPassword(user.pterodactylUserId, newPassword);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { pterodactylPassword: newPassword },
+    });
+
+    return { password: newPassword };
+  }
+
   // ── Subdomain ────────────────────────────────────────────────────────────
 
   async getSubdomain(serverId: number, userId: number) {

@@ -1,3 +1,8 @@
 {
-  "/(dashboard)/servers/[id]/page": "app/(dashboard)/servers/[id]/page.js"
+  "/page": "app/page.js",
+  "/(dashboard)/dashboard/page": "app/(dashboard)/dashboard/page.js",
+  "/(dashboard)/admin/page": "app/(dashboard)/admin/page.js",
+  "/(dashboard)/admin/site/page": "app/(dashboard)/admin/site/page.js",
+  "/(dashboard)/billing/page": "app/(dashboard)/billing/page.js",
+  "/(dashboard)/affiliate/page": "app/(dashboard)/affiliate/page.js"
 }

@@ -22,8 +22,8 @@ export class ServersController {
   }
 
   @Get('nodes')
-  nodes() {
-    return this.serversService.getAvailableNodes();
+  nodes(@Query('planType') planType?: string, @Query('planId') planId?: string) {
+    return this.serversService.getAvailableNodes(planType, planId ? +planId : undefined);
   }
 
   @Get('eggs')

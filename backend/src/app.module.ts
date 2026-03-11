@@ -19,6 +19,8 @@ import { PterodactylModule } from './pterodactyl/pterodactyl.module';
 import { CronModule } from './cron/cron.module';
 import { HealthModule } from './health/health.module';
 import { DnsModule } from './dns/dns.module';
+import { AffiliateModule } from './affiliate/affiliate.module';
+import { DiscordBotModule } from './discord-bot/discord-bot.module';
 import envConfig from './config/env.config';
 
 @Module({
@@ -52,6 +54,8 @@ import envConfig from './config/env.config';
     BackupsModule,
     CronModule,
     HealthModule,
+    AffiliateModule,
+    DiscordBotModule,
   ],
 })
 export class AppModule {}

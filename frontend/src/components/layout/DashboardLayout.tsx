@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/auth-context';
 import { Sidebar } from './Sidebar';
 import { Topbar } from './Topbar';
+import { PopupMessages } from '@/components/ui/PopupMessages';
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -29,6 +30,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#0f0f0f]">
+      <PopupMessages />
       <Sidebar />
       <div className="flex flex-1 flex-col overflow-auto">
         <Topbar />

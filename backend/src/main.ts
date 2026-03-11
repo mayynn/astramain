@@ -3,6 +3,8 @@ import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import helmet from 'helmet';
 import * as compression from 'compression';
+import * as express from 'express';
+import { join } from 'path';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -13,6 +15,10 @@ async function bootstrap() {
     crossOriginResourcePolicy: { policy: 'cross-origin' },
   }));
   app.use(compression());
+
+  // Serve uploaded files
+  const uploadsDir = process.env.UPLOAD_DIR || './uploads';
+  app.use('/uploads', express.static(join(process.cwd(), uploadsDir)));
 
   // CORS
   const allowedOrigins = (process.env.FRONTEND_URL || 'http://localhost:3000')
