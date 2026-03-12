@@ -147,7 +147,7 @@ wait_for_postgres() {
     log "Waiting for PostgreSQL to be ready..."
 
     local retries=0
-    while ! docker compose -f "$COMPOSE_FILE" exec -T postgres pg_isready -U postgres >/dev/null 2>&1; do
+    while ! docker compose -f "$COMPOSE_FILE" exec -T postgres pg_isready -q >/dev/null 2>&1; do
         retries=$((retries + 1))
         if [[ $retries -gt 30 ]]; then
             err "PostgreSQL did not become ready."
@@ -157,18 +157,37 @@ wait_for_postgres() {
     done
 }
 
+resolve_postgres_admin_user() {
+    load_env_for_compose
+
+    local candidate
+    for candidate in "${POSTGRES_USER:-}" postgres; do
+        [[ -z "$candidate" ]] && continue
+        if docker compose -f "$COMPOSE_FILE" exec -T postgres \
+            psql -U "$candidate" -d postgres -Atqc "SELECT 1" >/dev/null 2>&1; then
+            echo "$candidate"
+            return 0
+        fi
+    done
+
+    err "Could not connect to PostgreSQL with the configured role or the default 'postgres' role."
+    err "If you changed POSTGRES_USER on an existing volume, keep the old bootstrap user or migrate manually."
+    return 1
+}
+
 ensure_postgres_runtime_sync() {
     load_env_for_compose
 
-    local pg_user pg_password pg_db escaped_password
+    local admin_user pg_user pg_password pg_db escaped_password
+    admin_user=$(resolve_postgres_admin_user) || return 1
     pg_user="${POSTGRES_USER:-astra}"
     pg_password="${POSTGRES_PASSWORD:-}"
     pg_db="${POSTGRES_DB:-astra}"
     escaped_password=${pg_password//\'/\'\'}
 
-    log "Syncing live PostgreSQL role/database with backend/.env..."
+    log "Syncing live PostgreSQL role/database with backend/.env using admin role '$admin_user'..."
 
-    docker compose -f "$COMPOSE_FILE" exec -T postgres psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
+    docker compose -f "$COMPOSE_FILE" exec -T postgres psql -U "$admin_user" -d postgres -v ON_ERROR_STOP=1 \
         -v app_user="$pg_user" \
         -v app_password="$escaped_password" \
         -v app_db="$pg_db" <<'SQLEOF' >/dev/null
@@ -1234,8 +1253,10 @@ backup_database() {
     local backup_file="$BACKUP_DIR/db-$(date +%Y%m%d-%H%M%S).sql.gz"
 
     if docker compose -f "$COMPOSE_FILE" ps postgres --status running -q 2>/dev/null | grep -q .; then
+        local admin_user
+        admin_user=$(resolve_postgres_admin_user) || return 1
         docker compose -f "$COMPOSE_FILE" exec -T postgres \
-            pg_dumpall -U postgres | gzip > "$backup_file"
+            pg_dumpall -U "$admin_user" | gzip > "$backup_file"
         log "Backup saved: $backup_file"
     else
         warn "PostgreSQL not running, skipping backup."
