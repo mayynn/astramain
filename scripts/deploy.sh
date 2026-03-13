@@ -25,7 +25,7 @@ set -euo pipefail
 # ── Configuration ──────────────────────────────────────────────────────────────
 COMPOSE_FILE="${COMPOSE_FILE:-docker-compose.yml}"
 BACKUP_DIR="${BACKUP_DIR:-./backups}"
-HEALTH_URL="${HEALTH_URL:-http://localhost/api/health}"
+HEALTH_URL="${HEALTH_URL:-http://localhost:8080/api/health}"
 HEALTH_RETRIES=10
 HEALTH_DELAY=5
 SSL_DIR="./ssl"
@@ -797,7 +797,7 @@ limit_req_zone \$binary_remote_addr zone=auth:10m rate=5r/m;
 
 # ── HTTP -> HTTPS redirect ─────────────────────────────────────────────────
 server {
-    listen 80;
+    listen 8080;
     server_name ${domain} *.${domain};
 
     # Health check over HTTP (for internal Docker healthchecks)
@@ -929,7 +929,7 @@ limit_req_zone $binary_remote_addr zone=api:10m rate=30r/s;
 limit_req_zone $binary_remote_addr zone=auth:10m rate=5r/m;
 
 server {
-    listen 80;
+    listen 8080;
 NGINXEOF
 
     echo "    server_name ${server_names};" >> nginx/nginx.conf
